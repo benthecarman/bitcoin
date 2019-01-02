@@ -25,15 +25,30 @@ class HTTPBasicsTest(BitcoinTestFramework):
     def set_test_params(self):
         self.num_nodes = 2
 
+    def setup_network(self):
+        self.setup_nodes()
+
     def setup_chain(self):
         super().setup_chain()
         #Append rpcauth to bitcoin.conf before initialization
+        whitelist = "rpcwhitelist=__cookie__:getblockcount,stop,getbestblockhash\n"
+
         rpcauth = "rpcauth=rt:93648e835a54c573682c2eb19f882535$7681e9c5b74bdd85e78166031d2058e1069b3ed7ed967c93fc63abba06f31144"
+        whitelist += "rpcwhitelist=rt:getbestblockhash\n"
+
         rpcauth2 = "rpcauth=rt2:f8607b1a88861fac29dfccf9b52ff9f$ff36a0c23c8c62b4846112e50fa888416e94c17bfd4c42f88fd8f55ec6a3137e"
+        whitelist += "rpcwhitelist=rt2:getbestblockhash\n"
+
+        #not whitelisted
+        rpcauth_blocked = "rpcauth=blocked:e66047993b1784b4dc4dddbccf9c297$fb62cda6ae6a31edf42d3d4b639a0d965e9bcea49bf1c2d61d423f373891daa1"
+
         rpcuser = "rpcuser=rpcuser💻"
+        whitelist += "rpcwhitelist=rpcuser💻:getbestblockhash\n"
+
         rpcpassword = "rpcpassword=rpcpassword🔑"
 
         self.user = ''.join(SystemRandom().choice(string.ascii_letters + string.digits) for _ in range(10))
+        whitelist += "rpcwhitelist={}:getbestblockhash\n".format(self.user)
         config = configparser.ConfigParser()
         config.read_file(open(self.options.configfile))
         gen_rpcauth = config['environment']['RPCAUTH']
@@ -44,7 +59,9 @@ class HTTPBasicsTest(BitcoinTestFramework):
 
         with open(os.path.join(get_datadir_path(self.options.tmpdir, 0), "bitcoin.conf"), 'a', encoding='utf8') as f:
             f.write(rpcauth+"\n")
+            f.write(whitelist)
             f.write(rpcauth2+"\n")
+            f.write(rpcauth_blocked+"\n")
             f.write(rpcauth3+"\n")
         with open(os.path.join(get_datadir_path(self.options.tmpdir, 1), "bitcoin.conf"), 'a', encoding='utf8') as f:
             f.write(rpcuser+"\n")
@@ -66,6 +83,9 @@ class HTTPBasicsTest(BitcoinTestFramework):
         #Second authpair with different username
         password2 = "8/F3uMDw4KSEbw96U3CA1C4X05dkHDN2BPFjTgZW4KI="
         authpairnew = "rt:"+password
+
+        #Third authpair (not whitelisted)
+        password_blocked = "qpd5D9Y1mSavkBlIomhXlG4cqcRLveJvhyANVSxtk70="
 
         self.log.info('Correct...')
         headers = {"Authorization": "Basic " + str_to_b64str(authpair)}
@@ -122,6 +142,29 @@ class HTTPBasicsTest(BitcoinTestFramework):
         conn.request('POST', '/', '{"method": "getbestblockhash"}', headers)
         resp = conn.getresponse()
         assert_equal(resp.status, 200)
+        conn.close()
+
+        self.log.info('rt2 is not whitelisted on this specific rpc...')
+        authpairnew = "rt2:"+password2
+        headers = {"Authorization": "Basic " + str_to_b64str(authpairnew)}
+
+        conn = http.client.HTTPConnection(url.hostname, url.port)
+        conn.connect()
+        conn.request('POST', '/', '{"method": "getnetworkinfo"}', headers)
+        resp = conn.getresponse()
+        assert_equal(resp.status, 403)
+        conn.close()
+
+
+        self.log.info('Calling an rpc from a user with no whitelist...')
+        authpairnew = "blocked:" + password_blocked
+        headers = {"Authorization": "Basic " + str_to_b64str(authpairnew)}
+
+        conn = http.client.HTTPConnection(url.hostname, url.port)
+        conn.connect()
+        conn.request('POST', '/', '{"method": "getbestblockhash"}', headers)
+        resp = conn.getresponse()
+        assert_equal(resp.status, 403)
         conn.close()
 
         #Wrong password for rt2
