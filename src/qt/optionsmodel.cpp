@@ -117,6 +117,10 @@ void OptionsModel::Init(bool resetSettings)
         settings.setValue("bSpendZeroConfChange", true);
     if (!m_node.softSetBoolArg("-spendzeroconfchange", settings.value("bSpendZeroConfChange").toBool()))
         addOverriddenOption("-spendzeroconfchange");
+    if (!settings.contains("bSpendZeroConfTx"))
+        settings.setValue("bSpendZeroConfTx", true);
+    if (!m_node.softSetBoolArg("-spendzeroconftx", settings.value("bSpendZeroConfTx").toBool()))
+        addOverriddenOption("-spendzeroconftx");
 #endif
 
     // Network
@@ -282,6 +286,8 @@ QVariant OptionsModel::data(const QModelIndex & index, int role) const
 #ifdef ENABLE_WALLET
         case SpendZeroConfChange:
             return settings.value("bSpendZeroConfChange");
+        case SpendZeroConfTx:
+            return settings.value("bSpendZeroConfTx");
 #endif
         case DisplayUnit:
             return nDisplayUnit;
@@ -394,6 +400,12 @@ bool OptionsModel::setData(const QModelIndex & index, const QVariant & value, in
         case SpendZeroConfChange:
             if (settings.value("bSpendZeroConfChange") != value) {
                 settings.setValue("bSpendZeroConfChange", value);
+                setRestartRequired(true);
+            }
+            break;
+        case SpendZeroConfTx:
+            if (settings.value("bSpendZeroConfTx") != value) {
+                settings.setValue("bSpendZeroConfTx", value);
                 setRestartRequired(true);
             }
             break;

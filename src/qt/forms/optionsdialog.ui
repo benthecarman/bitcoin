@@ -226,6 +226,16 @@
             </property>
            </widget>
           </item>
+          <item>
+           <widget class="QCheckBox" name="spendZeroConfTx">
+            <property name="toolTip">
+             <string>If you disable the spending of unconfirmed outputs, the output from a transaction cannot be used until that transaction has at least one confirmation.</string>
+            </property>
+            <property name="text">
+             <string>&amp;Spend unconfirmed outputs</string>
+            </property>
+           </widget>
+          </item>
          </layout>
         </widget>
        </item>

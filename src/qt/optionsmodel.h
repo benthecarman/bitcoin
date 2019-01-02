@@ -54,6 +54,7 @@ public:
         PruneSize,              // int
         DatabaseCache,          // int
         SpendZeroConfChange,    // bool
+        SpendZeroConfTx,        // bool
         Listen,                 // bool
         OptionIDRowCount,
     };
