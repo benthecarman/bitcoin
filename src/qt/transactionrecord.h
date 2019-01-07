@@ -77,10 +77,10 @@ public:
     {
         Other,
         Generated,
-        SendToAddress,
-        SendToOther,
         RecvWithAddress,
         RecvFromOther,
+        SendToAddress,
+        SendToOther,
         SendToSelf
     };
 
