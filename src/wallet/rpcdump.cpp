@@ -323,6 +323,111 @@ UniValue importaddress(const JSONRPCRequest& request)
     return NullUniValue;
 }
 
+static void RemoveAddress(CWallet*, const CTxDestination& dest, bool purgeTxs);
+static void RemoveScript(CWallet* const pwallet, const CScript& script, bool isRedeemScript, bool purgeTxs) EXCLUSIVE_LOCKS_REQUIRED(pwallet->cs_wallet)
+{
+    isminetype ismine = pwallet->IsMine(script);
+    if (!isRedeemScript && ismine == ISMINE_SPENDABLE) {
+        throw JSONRPCError(RPC_WALLET_ERROR, "The wallet contains the private key for this address");
+    } else if (!isRedeemScript && ismine == ISMINE_NO) {
+        throw JSONRPCError(RPC_WALLET_ERROR, "The wallet does not contain this address or script");
+    }
+    assert(ismine == ISMINE_WATCH_ONLY || isRedeemScript);
+
+	auto spk_man = pwallet->GetLegacyScriptPubKeyMan();
+
+    if (spk_man->HaveWatchOnly(script) && !spk_man->RemoveWatchOnly(script)) {
+        throw JSONRPCError(RPC_WALLET_ERROR, "Error removing address/script from wallet");
+    }
+    if (isRedeemScript){
+        const CScriptID id(script);
+        if (!spk_man->HaveCScript(id)) {
+            throw JSONRPCError(RPC_WALLET_ERROR, "Error removing p2sh redeemScript from wallet");
+        }
+        RemoveAddress(pwallet, id, purgeTxs);
+    } else {
+        CTxDestination destination;
+        if (ExtractDestination(script, destination)) {
+            pwallet->DelAddressBook(destination);
+        }
+    }
+
+	if (purgeTxs) {
+    	pwallet->RemoveOldTransactions(script);
+	}
+}
+
+static void RemoveAddress(CWallet* const pwallet, const CTxDestination& dest, bool purgeTxs) EXCLUSIVE_LOCKS_REQUIRED(pwallet->cs_wallet)
+{
+    CScript script = GetScriptForDestination(dest);
+    RemoveScript(pwallet, script, false, purgeTxs);
+    // remove from address book
+    if (IsValidDestination(dest)) {
+        pwallet->DelAddressBook(dest);
+    }
+}
+
+UniValue removeaddress(const JSONRPCRequest& request)
+{
+    std::shared_ptr<CWallet> const wallet = GetWalletForJSONRPCRequest(request);
+    CWallet* const pwallet = wallet.get();
+    if (!EnsureWalletIsAvailable(pwallet, request.fHelp)) {
+        return NullUniValue;
+    }
+
+			RPCHelpMan{"removeaddress",
+                "\nRemoves an address or script (in hex) that was being watched as if it were in your wallet but was not being used to spend. Requires a new wallet backup.\n",
+                {
+                    {"address", RPCArg::Type::STR, RPCArg::Optional::NO, "The Bitcoin address (or hex-encoded script)"},
+                    {"p2sh", RPCArg::Type::BOOL, /* default */ "false", "Remove the P2SH version of the script as well"},
+                    {"purgetransactions", RPCArg::Type::BOOL, /* default_val */ "false", "Remove existing transactions from the wallet"},
+                },
+                RPCResult{RPCResult::Type::NONE, "", ""},
+                RPCExamples{
+            "\nExamples:\n"
+            "\nRemove an address\n"
+            + HelpExampleCli("removeaddress", "\"myaddress\"") +
+            "\nAs a JSON-RPC call\n"
+            + HelpExampleRpc("removeaddress", "\"myaddress\"")
+                },
+            }.Check(request);
+		
+
+	EnsureLegacyScriptPubKeyMan(*pwallet, true);
+
+    // Whether to remove the p2sh version too
+    bool fP2SH = false;
+    if (!request.params[1].isNull()) {
+        fP2SH = request.params[1].get_bool();
+    }
+
+	// Whether to remove the wallet transactions too
+    bool fPurgeTxs = false;
+    if (!request.params[2].isNull()) {
+        fPurgeTxs = request.params[2].get_bool();
+    }
+
+    {
+        LOCK(pwallet->cs_wallet);
+
+        CTxDestination dest = DecodeDestination(request.params[0].get_str());
+        if (IsValidDestination(dest)) {
+            if (fP2SH) {
+                throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Cannot use the p2sh flag with an address - use a script instead");
+            }
+            RemoveAddress(pwallet, dest, fPurgeTxs);
+        }
+        else if (IsHex(request.params[0].get_str())) {
+            std::vector<unsigned char> data(ParseHex(request.params[0].get_str()));
+            RemoveScript(pwallet, CScript(data.begin(), data.end()), fP2SH, fPurgeTxs);
+        } else {
+            throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid Bitcoin address or script");
+        }
+    }
+
+    return NullUniValue;
+}
+
 UniValue importprunedfunds(const JSONRPCRequest& request)
 {
     std::shared_ptr<CWallet> const wallet = GetWalletForJSONRPCRequest(request);
