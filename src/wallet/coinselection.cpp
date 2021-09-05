@@ -346,6 +346,9 @@ CAmount GetSelectionWaste(const std::set<CInputCoin>& inputs, CAmount change_cos
 {
     // This function should not be called with empty inputs as that would mean the selection failed
     assert(!inputs.empty());
+    // This funciton should not be called with a negative change_cost
+    // this would mean that we are incentivizing new change outputs
+    assert(change_cost >= 0);
 
     // Always consider the cost of spending an input now vs in the future.
     CAmount waste = 0;

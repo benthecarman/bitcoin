@@ -730,6 +730,8 @@ BOOST_AUTO_TEST_CASE(waste_test)
     const CAmount exact_target = in_amt - 2 * fee;
     BOOST_CHECK_EQUAL(0, GetSelectionWaste(selection, 0, exact_target));
 
+    // Negative change_cost should fail
+    BOOST_CHECK_THROW(GetSelectionWaste(selection, -1, exact_target), std::runtime_error);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
