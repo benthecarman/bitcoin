@@ -145,6 +145,7 @@ public:
         std::optional<std::vector<uint8_t>> challenge{};
         std::optional<std::vector<std::string>> seeds{};
         RenounceParameters renounce{};
+        int64_t pow_target_spacing{10 * 60};
     };
 
     /**
