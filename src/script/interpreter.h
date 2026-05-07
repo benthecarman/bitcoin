@@ -335,6 +335,11 @@ public:
         return false;
     }
 
+    virtual uint256 GetTemplateHash(ScriptExecutionData& execdata) const
+    {
+        return {};
+    }
+
     virtual ~BaseSignatureChecker() = default;
 };
 
@@ -373,6 +378,7 @@ public:
     bool CheckLockTime(const CScriptNum& nLockTime) const override;
     bool CheckSequence(const CScriptNum& nSequence) const override;
     bool CheckDefaultCheckTemplateVerifyHash(const Span<const unsigned char>& hash) const override;
+    uint256 GetTemplateHash(ScriptExecutionData& execdata) const override;
 };
 
 using TransactionSignatureChecker = GenericTransactionSignatureChecker<CTransaction>;
@@ -403,6 +409,11 @@ public:
     bool CheckSequence(const CScriptNum& nSequence) const override
     {
         return m_checker.CheckSequence(nSequence);
+    }
+
+    uint256 GetTemplateHash(ScriptExecutionData& execdata) const override
+    {
+        return m_checker.GetTemplateHash(execdata);
     }
 };
 

@@ -1,0 +1,9 @@
+{
+    "binana": [2026, 1, 0],
+    "deployment": "TEMPLATEHASH",
+    "scriptverify": true,
+    "scriptverify_discourage": true,
+    "opcodes": {
+        "TEMPLATEHASH": "0xce"
+    }
+}
