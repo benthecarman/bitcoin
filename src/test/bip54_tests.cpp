@@ -53,7 +53,8 @@ static void WriteJSONTestVectors(const std::vector<T>& test_vectors, std::string
     for (const auto& test_vector: test_vectors) {
         json_vectors.push_back(test_vector.GetJson());
     }
-    const auto json_str{json_vectors.write(4)};
+    auto json_str{json_vectors.write(4)};
+    json_str += '\n';
     FILE* file = fsbridge::fopen(filename, "w");
     fputs(json_str.c_str(), file);
     fclose(file);
@@ -860,7 +861,7 @@ BOOST_AUTO_TEST_CASE(bip54_legacy_sigops)
             tx_copy2.vin[idx].scriptSig << OP_0 << sig << ToByteVector(redeem_script);
             BOOST_REQUIRE(VerifyTxin(spk, tx_copy2, idx));
 
-            CheckExceedsBIP54Limits(CTransaction(tx_copy2), coins, test_vectors, "Mixed input types reaching exactly 2500 BIP54-sigops + a P2SH input with 1-of-1 CHECMULTISIG");
+            CheckExceedsBIP54Limits(CTransaction(tx_copy2), coins, test_vectors, "Mixed input types reaching exactly 2500 BIP54-sigops + a P2SH input with 1-of-1 CHECKMULTISIG");
         }
 
         // Adding an input spending an invalid Script but containing a CHECKSIG will
@@ -1249,7 +1250,7 @@ BOOST_AUTO_TEST_CASE(bip54_legacy_sigops)
         tx2.vin.emplace_back(tx_create.GetHash(), 0);
 
         // CheckSigopsBIP54 will return false because there is 126 CMS that account for 20 each.
-        CheckExceedsBIP54Limits(CTransaction(tx2), coins, test_vectors, "Invalid bare script with 126 CHECMULTISIGs each accounted for 20 BIP54-sigops");
+        CheckExceedsBIP54Limits(CTransaction(tx2), coins, test_vectors, "Invalid bare script with 126 CHECKMULTISIGs each accounted for 20 BIP54-sigops");
     }
 
     // Note this is also a limitation for legitimate Scripts, for instance if the arguments to
@@ -1558,6 +1559,18 @@ BOOST_AUTO_TEST_CASE(bip54_txsize)
         tx_copy.vin.back().scriptWitness.stack.emplace_back(std::move(sig));
         Assert(GetSerializeSize(TX_NO_WITNESS(tx_copy)) == INVALID_TX_NONWITNESS_SIZE);
         RecordTestCase(test_vectors, CTransaction{tx_copy}, /*valid=*/false, "A 64-byte Segwit transaction (1 p2tr input, 1 p2a output).");
+    }
+
+    // A semi-realistic 64-byte transaction: 1 Taproot input with an annex, 1 OP_RETURN output.
+    {
+        CMutableTransaction tx_copy{tx};
+        tx_copy.vout.back().scriptPubKey << OP_RETURN << "ab01"_hex_v;
+        auto sig{"5a78b5a14a2527feb02c08b8124e74c3b9bcc1bd3dba1fbfa87f1c930f28a46fea2bf375105dfd835e212c9127aad4976c46ef86be02edbb681e6f38f9a9e06f01"_hex_v_u8};
+        tx_copy.vin.back().scriptWitness.stack.emplace_back(std::move(sig));
+        auto annex{"4242ffab2121"_hex_v_u8};
+        tx_copy.vin.back().scriptWitness.stack.emplace_back(std::move(annex));
+        Assert(GetSerializeSize(TX_NO_WITNESS(tx_copy)) == INVALID_TX_NONWITNESS_SIZE);
+        RecordTestCase(test_vectors, CTransaction{tx_copy}, /*valid=*/false, "A 64-byte Segwit transaction (1 p2tr input with annex, 1 OP_RETURN output).");
     }
 
     // Historical 64-byte transactions. Taken from Chris Stewart's BIP53.
