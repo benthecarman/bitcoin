@@ -19,7 +19,11 @@ int CCrypter::BytesToKeySHA512AES(const std::span<const unsigned char> salt, con
     // greater than the aes256 block size (16b) + aes256 key size (32b),
     // there's no need to process more than once (D_0).
 
-    if(!count || !key || !iv)
+    // Reject a non-positive count: the loop below would otherwise run billions of SHA-512 rounds,
+    // hanging key derivation for hours. This is reachable because rounds is passed in as an
+    // unsigned int (deserialized from the wallet file without an upper bound), and values above
+    // INT_MAX narrow to a negative count here.
+    if(count < 1 || !key || !iv)
         return 0;
 
     unsigned char buf[CSHA512::OUTPUT_SIZE];
