@@ -475,6 +475,17 @@ void TxOrphanageImpl::LimitOrphans()
     };
     std::make_heap(heap_peer_dos.begin(), heap_peer_dos.end(), compare_score);
 
+    // If no peer exceeds its per-peer allowance but a global limit is still exceeded (only possible
+    // when peers outnumber the global latency score, so the clamped per-peer allowances sum to more
+    // than the global limit), fall back to evicting the oldest announcements regardless of peer.
+    if (heap_peer_dos.empty()) {
+        auto& index_by_peer = m_orphans.get<ByPeer>();
+        for (auto it{index_by_peer.begin()}; NeedsTrim() && it != index_by_peer.end();) {
+            Erase<ByPeer>(it++);
+        }
+        return;
+    }
+
     unsigned int num_erased{0};
     // This outer loop finds the peer with the highest DoS score, which is a fraction of memory and latency scores
     // over the respective allowances. We continue until the orphanage is within global limits. That means some peers
@@ -770,7 +781,12 @@ void TxOrphanageImpl::SanityCheck() const
 TxOrphanage::Count TxOrphanageImpl::MaxGlobalLatencyScore() const { return m_max_global_latency_score; }
 TxOrphanage::Count TxOrphanageImpl::TotalLatencyScore() const { return m_unique_rounded_input_scores + m_orphans.size(); }
 TxOrphanage::Usage TxOrphanageImpl::ReservedPeerUsage() const { return m_reserved_usage_per_peer; }
-TxOrphanage::Count TxOrphanageImpl::MaxPeerLatencyScore() const { return m_max_global_latency_score / std::max<unsigned int>(m_peer_orphanage_info.size(), 1); }
+TxOrphanage::Count TxOrphanageImpl::MaxPeerLatencyScore() const
+{
+    // Clamp to at least 1: if peers outnumber the global latency score, the division would return 0,
+    // and GetDosScore() asserts a positive maximum.
+    return std::max<Count>(m_max_global_latency_score / std::max<unsigned int>(m_peer_orphanage_info.size(), 1), 1);
+}
 TxOrphanage::Usage TxOrphanageImpl::MaxGlobalUsage() const { return m_reserved_usage_per_peer * std::max<int64_t>(m_peer_orphanage_info.size(), 1); }
 
 bool TxOrphanageImpl::NeedsTrim() const

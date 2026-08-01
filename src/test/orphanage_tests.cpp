@@ -415,6 +415,31 @@ BOOST_AUTO_TEST_CASE(peer_dos_limits)
 
         orphanage->SanityCheck();
     }
+
+    // More peers than the max latency score: per-peer maximum clamps to 1.
+    {
+        // If the number of peers exceeds the global latency score, the per-peer maximum latency score
+        // would compute to 0. It is clamped to 1 (GetDosScore asserts a positive maximum). When every
+        // peer is within the clamped allowance but the global limit is exceeded, trimming falls back
+        // to evicting the oldest announcements regardless of peer.
+        auto orphanage = node::MakeTxOrphanage(/*max_global_latency_score=*/3, /*reserved_peer_usage=*/TOTAL_SIZE);
+        for (NodeId peer{0}; peer < 3; ++peer) {
+            BOOST_CHECK(orphanage->AddTx(txns.at(peer), peer));
+        }
+        BOOST_CHECK_EQUAL(orphanage->MaxPeerLatencyScore(), 1);
+        // The 4th and 5th peers push the orphanage above its global latency score. No peer exceeds
+        // the clamped per-peer allowance, so the oldest announcements are evicted instead.
+        BOOST_CHECK(orphanage->AddTx(txns.at(3), 3));
+        BOOST_CHECK(!orphanage->HaveTx(txns.at(0)->GetWitnessHash()));
+        BOOST_CHECK(orphanage->AddTx(txns.at(4), 4));
+        BOOST_CHECK(!orphanage->HaveTx(txns.at(1)->GetWitnessHash()));
+        // The newer announcements are unaffected.
+        for (NodeId peer{2}; peer < 5; ++peer) {
+            BOOST_CHECK(orphanage->HaveTxFromPeer(txns.at(peer)->GetWitnessHash(), peer));
+        }
+        BOOST_CHECK(orphanage->TotalLatencyScore() <= orphanage->MaxGlobalLatencyScore());
+        orphanage->SanityCheck();
+    }
 }
 BOOST_AUTO_TEST_CASE(DoS_mapOrphans)
 {
